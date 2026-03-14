@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "prompt": "Your prompt here",
+    "tags": ["tag1", "tag2"],
+    "status": "pending"
+  },
+  {
+    "id": 2,
+    "prompt": "Another prompt here",
+    "tags": ["tag1"],
+    "status": "pending"
+  }
+]
