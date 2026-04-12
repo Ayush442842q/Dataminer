@@ -6,13 +6,16 @@ from scraper.chatgpt import get_response
 from database.operations import save_response, save_failed
 from utils.human import random_delay
 
+
 def load_prompts():
     with open(PROMPTS_FILE, "r") as f:
         return json.load(f)
 
+
 def save_prompts(prompts):
     with open(PROMPTS_FILE, "w") as f:
         json.dump(prompts, f, indent=2)
+
 
 def run_all_prompts():
     prompts = load_prompts()
@@ -25,24 +28,25 @@ def run_all_prompts():
         prompt = prompt_obj["prompt"]
         tags   = prompt_obj.get("tags", [])
 
-        print(f"  {'─'*45}")
+        print(f"  {'-'*45}")
         print(f"  🔁 Prompt {i+1}/{len(pending)}  (ID: {pid})")
-        print(f"  📝 {prompt[:75]}...")
+        print(f"  📝 {prompt[:50]}...")
 
         success = False
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 response = get_response(prompt)
-                if response:
-                    save_response(prompt, response, tags)
+                if not response:
+                    print(f"  📭 Empty response — attempt {attempt}/{MAX_RETRIES}")
+                else:
+                    saved = save_response(prompt, response, tags)
+                    # Mark done in prompts.json whether duplicate or fresh save
                     for p in prompts:
                         if p["id"] == pid:
                             p["status"] = "done"
                     save_prompts(prompts)
                     success = True
                     break
-                else:
-                    print(f"  ↩️  Empty response — attempt {attempt}/{MAX_RETRIES}")
             except Exception as e:
                 print(f"  ⚠️  Error on attempt {attempt}: {e}")
 
@@ -60,3 +64,31 @@ def run_all_prompts():
             random_delay(MIN_DELAY, MAX_DELAY)
 
     print(f"\n  🎉 All prompts processed!")
+
+
+def watch_and_run(poll_interval: int = 10):
+    """
+    Persistent loop — stays running, watches prompts.json for new pending
+    prompts, and processes them without relaunching Chrome.
+    Called by main.py instead of run_all_prompts() when in watch mode.
+    """
+    print(f"\n  👁  Watching for new prompts every {poll_interval}s...")
+    print(f"  ⚠️  DO NOT move your mouse while running!")
+    print(f"  ⚠️  Move mouse to TOP-LEFT corner to emergency stop.\n")
+
+    while True:
+        try:
+            prompts = load_prompts()
+            pending = [p for p in prompts if p["status"] == "pending"]
+
+            if pending:
+                run_all_prompts()
+            else:
+                time.sleep(poll_interval)
+
+        except KeyboardInterrupt:
+            print("\n  🛑 Stopped by user.")
+            break
+        except Exception as e:
+            print(f"  ⚠️  Watch loop error: {e}")
+            time.sleep(poll_interval)
